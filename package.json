@@ -1,0 +1,14 @@
+{
+  "name": "filename-consolidator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "pattern.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Jesus Arevalo <isa90201@gmail.com>",
+  "license": "ISC",
+  "dependencies": {
+    "linux-commands-async": "^1.3.6"
+  }
+}
