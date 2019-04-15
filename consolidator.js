@@ -1,3 +1,4 @@
+let Path = require('path');
 let LinuxCommands = require('linux-commands-async');
 
 //------------------------------------
@@ -8,10 +9,6 @@ function CharIsAlpha(char) {
 
 function CharIsNumber(char) {
   return !CharIsAlpha(char) && /^[0-9]/.test(char);
-}
-
-function AreEqual(a, b) {
-  return a.toString() == b.toString();
 }
 
 //-------------------------
@@ -130,31 +127,6 @@ class StringInfoFactory {
 
 //----------------------------
 
-
-function NumberPatternToFormatString(pattern) {
-  let formatStr = null;
-
-  if (pattern.length < 10)
-    formatStr = `%0${pattern.length}d`;
-  else
-    formatStr = `%${pattern.length}d`;
-
-  return formatStr;
-}
-
-function HasNumericPart(strInfo) {
-  let parts = strInfo.patternParts;
-
-  for (let i = 0; i < parts.length; ++i) {
-    let currPart = parts[i];
-
-    if (currPart.patternType == 'number')
-      return true;
-  }
-
-  return false;
-}
-
 function AllPartsMatchExceptForOne(strInfo1, strInfo2) {
   let parts1 = strInfo1.patternParts;
   let parts2 = strInfo2.patternParts;
@@ -212,8 +184,12 @@ function GetMismatchIndex(strInfo1, strInfo2) {
   return null;
 }
 
-
-function GetConsolidatedList(strArr) {
+/**
+ * Get a list of format strings that condense all filenames into fewer ones (if any are alike).
+ * @param {Array<string>} strArr List of filenames.
+ * @returns {Array<string>} Returns a list of strings.
+ */
+function GetConsolidatedFormatStrings(strArr) {
   if (strArr.length == 1)
     return strArr[0];
 
@@ -226,8 +202,6 @@ function GetConsolidatedList(strArr) {
   let doneChecking = [];  // Place info objects that have been checked here
   let hasBeenConsolidated = [];
   let consolidatedNames = [];
-
-  let consolidatedObjects = [];
 
   for (let i = 0; i < infos.length; ++i) {
     let currInfo = infos[i];
@@ -292,6 +266,12 @@ function GetConsolidatedList(strArr) {
   return consolidatedNames;
 }
 
+/**
+ * Get all filenames associated with the consolidated format string.
+ * @param {Array<string>} filenameList 
+ * @param {string} consolidatedString 
+ * @returns {Array<string>} Returns a list of filenames that match the consolidated format string.
+ */
 function GetFilenamesAssociatedWith(filenameList, consolidatedString) {
   let startIndex = consolidatedString.indexOf('[');
   let endIndex = consolidatedString.indexOf(']');
@@ -311,19 +291,20 @@ function GetFilenamesAssociatedWith(filenameList, consolidatedString) {
 
         // Check length
         if (leftStr.length == specifiedLength) {
+          let chars = leftStr.split('');
 
           // Check string type
           if (strType == 's') {
 
             // Check if string is alpha or alphanumeric
-            let numChars = leftStr.filter(x => CharIsNumber(x));
+            let numChars = chars.filter(x => CharIsNumber(x));
             if (numChars.length != leftStr.length)
               results.push(filename);
           }
           else if (strType == 'n') {
 
             // Check if string is numeric
-            let alphaChars = leftStr.filter(x => CharIsAlpha(x));
+            let alphaChars = chars.filter(x => CharIsAlpha(x));
             if (alphaChars.length != leftStr.length)
               results.push(filename);
           }
@@ -340,19 +321,20 @@ function GetFilenamesAssociatedWith(filenameList, consolidatedString) {
 
         // Check length
         if (rightStr.length == specifiedLength) {
+          let chars = rightStr.split('');
 
           // Check string type
           if (strType == 's') {
 
             // Check if string is alpha or alphanumeric
-            let numChars = rightStr.filter(x => CharIsNumber(x));
+            let numChars = chars.filter(x => CharIsNumber(x));
             if (numChars.length != rightStr.length)
               results.push(filename);
           }
           else if (strType == 'n') {
 
             // Check if string is numeric
-            let alphaChars = rightStr.filter(x => CharIsAlpha(x));
+            let alphaChars = chars.filter(x => CharIsAlpha(x));
             if (alphaChars.length != rightStr.length)
               results.push(filename);
           }
@@ -361,7 +343,7 @@ function GetFilenamesAssociatedWith(filenameList, consolidatedString) {
     });
   }
   else {
-    let leftStr = consolidatedString.substring(0, startIndex + 1);
+    let leftStr = consolidatedString.substring(0, startIndex);
     let rightStr = consolidatedString.substring(endIndex + 1);
 
     filenameList.forEach(filename => {
@@ -372,19 +354,20 @@ function GetFilenamesAssociatedWith(filenameList, consolidatedString) {
 
         // Check length
         if (middleStr.length == specifiedLength) {
+          let chars = middleStr.split('');
 
           // Check string type
           if (strType == 's') {
 
             // Check if string is alpha or alphanumeric
-            let numChars = middleStr.filter(x => CharIsNumber(x));
+            let numChars = chars.filter(x => CharIsNumber(x));
             if (numChars.length != middleStr.length)
               results.push(filename);
           }
           else if (strType == 'n') {
 
             // Check if string is numeric
-            let alphaChars = middleStr.filter(x => CharIsAlpha(x));
+            let alphaChars = chars.filter(x => CharIsAlpha(x));
             if (alphaChars.length != middleStr.length)
               results.push(filename);
           }
@@ -396,24 +379,39 @@ function GetFilenamesAssociatedWith(filenameList, consolidatedString) {
   return results;
 }
 
+//------------------------------------
+
+/**
+ * Get a list of files whose names match the consolidated format string.
+ * @param {string} dirPath 
+ * @param {string} consolidatedString 
+ * @returns {Promise<Array<string>>} Returns a Promise with the list of filenames.
+ */
+function GetFilenamesUsingFormatString(dirPath, consolidatedString) {
+  return new Promise((resolve, reject) => {
+    let startIndex = consolidatedString.indexOf('[');
+    let endIndex = consolidatedString.indexOf(']');
+    let formatStr = consolidatedString.substring(startIndex, endIndex + 1);
+    let searchStr = consolidatedString.replace(formatStr, '*');
+
+    LinuxCommands.Find.FilesByName(dirPath, searchStr, 1, LinuxCommands.Command.LOCAL).then(paths => {
+      // Sort filepaths in alphabetical order
+      let filepaths = paths.paths;
+      filepaths.sort();
+
+      // Convert to filenames
+      let allFilenames = filepaths.map(x => LinuxCommands.Path.Filename(x));
+
+      // Get all applicable filenames
+      let theseFilenames = GetFilenamesAssociatedWith(allFilenames, consolidatedString);
+
+      resolve(theseFilenames);
+    }).catch(error => reject(`Failed to get filenames using format string: ${error}`));
+  });
+}
 //--------------------------------------
-// TEST
+// EXPORTS
 
-let strArr = [
-  'o_oo1.png',
-  'o_oo2.png',
-  'o_pp1.png',
-  'o_ab1.png',
-  'o_pp2.png',
-  'connie a',
-  'connie b',
-  'a.gif',
-  'b.gif'
-];
-
-let names = GetConsolidatedList(strArr);
-console.log(`\nCONSOLIDATES_NAMES:\n${names.join('\n')}`);
-
-
-let filenames = GetFilenamesAssociatedWith(strArr, names[0]);
-console.log(`\n\nASSOCIATED WITH: ${names[0]}\n${filenames.join('\n')}`);
+exports.GetConsolidatedFormatStrings = GetConsolidatedFormatStrings;
+exports.GetFilenamesAssociatedWith = GetFilenamesAssociatedWith;
+exports.GetFilenamesUsingFormatString = GetFilenamesUsingFormatString;
