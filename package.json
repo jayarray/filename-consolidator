@@ -2,7 +2,7 @@
   "name": "filename-consolidator",
   "version": "1.0.0",
   "description": "",
-  "main": "pattern.js",
+  "main": "consolidator.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
