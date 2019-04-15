@@ -1,4 +1,3 @@
-let Path = require('path');
 let LinuxCommands = require('linux-commands-async');
 
 //------------------------------------
