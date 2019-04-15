@@ -1,3 +1,7 @@
+let LinuxCommands = require('linux-commands-async');
+
+//------------------------------------
+
 function CharIsAlpha(char) {
   return /^[a-zA-Z]/.test(char);
 }
@@ -223,41 +227,35 @@ function GetConsolidatedList(strArr) {
   let hasBeenConsolidated = [];
   let consolidatedNames = [];
 
-  console.log('\nConsolidating filenames...'); // DEBUG
+  let consolidatedObjects = [];
 
   for (let i = 0; i < infos.length; ++i) {
     let currInfo = infos[i];
-    console.log(`\n  CURR_INFO (i = ${i}): ${currInfo.patternParts.map(x => x.value).join('')}`); // DEBUG
 
     if (!hasBeenConsolidated.includes(currInfo)) {
-      let otherInfos = infos.filter(x => x != currInfo).filter(x => !doneChecking.includes(x)).filter(x => !hasBeenConsolidated.includes(x));
+      let otherInfos = infos.filter(x => x != currInfo);
       let potentialMatches = GetOtherInfosWhereAllPartsMatchExceptForOne(currInfo, otherInfos);
 
       if (potentialMatches.length != 0) {
-        console.log(`  POTENTIAL_MATCHES (${potentialMatches.length}): ${potentialMatches.map(x => x.patternParts.map(y => y.value).join(''))}`); // DEBUG
-
         let consolidationCount = 0;
 
         for (let k = 0; k < potentialMatches.length; ++k) {
           let currRemaining = potentialMatches[k];
-          console.log(`  REMAINING_INFO (k = ${k}): ${currRemaining.patternParts.map(x => x.value).join('')}`); // DEBUG
 
           if (currInfo.patternStr == currRemaining.patternStr && AllPartsMatchExceptForOne(currInfo, currRemaining)) {
             let index = GetMismatchIndex(currInfo, currRemaining);
-            console.log(`  MISMATCH_INDEX = ${index}`); // DEBUG
-
-            let replacementStr = '*';
             let mismatchInfo = currRemaining.patternParts[index];
+            let replacementStr = `[${mismatchInfo.patternStr.length}s]`;
+
 
             if (mismatchInfo.patternType == 'number') {
-              let numFormatStr = NumberPatternToFormatString(mismatchInfo.patternStr);
-              replacementStr = numFormatStr;
+              replacementStr = `[${mismatchInfo.patternStr.length}n]`;
             }
 
             let strArr = currRemaining.patternParts.map(x => x.value);
             strArr[index] = replacementStr;
 
-            consolidationCount += 1; // DEBUG
+            consolidationCount += 1;
             let consolidatedStr = strArr.join('');
 
             if (!consolidatedNames.includes(consolidatedStr))
@@ -282,7 +280,6 @@ function GetConsolidatedList(strArr) {
         doneChecking.push(currInfo);
       }
       else {
-        console.log('  Info is unique.')
         doneChecking.push(currInfo);
         hasBeenConsolidated.push(currInfo);
 
@@ -292,27 +289,131 @@ function GetConsolidatedList(strArr) {
     }
   }
 
-  console.log(`\nCONSOLIDATED_NAMES:`);
-  consolidatedNames.forEach(str => {
-    console.log(`  ${str}`);
-  });
-
   return consolidatedNames;
+}
+
+function GetFilenamesAssociatedWith(filenameList, consolidatedString) {
+  let startIndex = consolidatedString.indexOf('[');
+  let endIndex = consolidatedString.indexOf(']');
+  let formatStr = consolidatedString.substring(startIndex, endIndex + 1).replace('[', '').replace(']', '');
+  let specifiedLength = parseInt(formatStr.substring(0, formatStr.length - 1));
+  let strType = formatStr.charAt(formatStr.length - 1);
+
+  let results = [];
+
+  if (startIndex == 0) {
+    let endStr = consolidatedString.substring(endIndex + 1);
+
+    filenameList.forEach(filename => {
+      if (filename.endsWith(endStr)) {
+        let index = filename.indexOf(endStr);
+        let leftStr = filename.substring(0, index);
+
+        // Check length
+        if (leftStr.length == specifiedLength) {
+
+          // Check string type
+          if (strType == 's') {
+
+            // Check if string is alpha or alphanumeric
+            let numChars = leftStr.filter(x => CharIsNumber(x));
+            if (numChars.length != leftStr.length)
+              results.push(filename);
+          }
+          else if (strType == 'n') {
+
+            // Check if string is numeric
+            let alphaChars = leftStr.filter(x => CharIsAlpha(x));
+            if (alphaChars.length != leftStr.length)
+              results.push(filename);
+          }
+        }
+      }
+    });
+  }
+  else if (endIndex == consolidatedString.length - 1) {
+    let startStr = consolidatedString.substring(0, startIndex);
+
+    filenameList.forEach(filename => {
+      if (filename.startsWith(startStr)) {
+        let rightStr = filename.substring(startIndex);
+
+        // Check length
+        if (rightStr.length == specifiedLength) {
+
+          // Check string type
+          if (strType == 's') {
+
+            // Check if string is alpha or alphanumeric
+            let numChars = rightStr.filter(x => CharIsNumber(x));
+            if (numChars.length != rightStr.length)
+              results.push(filename);
+          }
+          else if (strType == 'n') {
+
+            // Check if string is numeric
+            let alphaChars = rightStr.filter(x => CharIsAlpha(x));
+            if (alphaChars.length != rightStr.length)
+              results.push(filename);
+          }
+        }
+      }
+    });
+  }
+  else {
+    let leftStr = consolidatedString.substring(0, startIndex + 1);
+    let rightStr = consolidatedString.substring(endIndex + 1);
+
+    filenameList.forEach(filename => {
+      if (filename.startsWith(leftStr) && filename.endsWith(rightStr)) {
+        let middleStartIndex = filename.indexOf(leftStr) + leftStr.length;
+        let middleEndIndex = (filename.length - rightStr.length);
+        let middleStr = filename.substring(middleStartIndex, middleEndIndex);
+
+        // Check length
+        if (middleStr.length == specifiedLength) {
+
+          // Check string type
+          if (strType == 's') {
+
+            // Check if string is alpha or alphanumeric
+            let numChars = middleStr.filter(x => CharIsNumber(x));
+            if (numChars.length != middleStr.length)
+              results.push(filename);
+          }
+          else if (strType == 'n') {
+
+            // Check if string is numeric
+            let alphaChars = middleStr.filter(x => CharIsAlpha(x));
+            if (alphaChars.length != middleStr.length)
+              results.push(filename);
+          }
+        }
+      }
+    });
+  }
+
+  return results;
 }
 
 //--------------------------------------
 // TEST
 
 let strArr = [
-  'isa_1.png',
-  'isa_2.png',
-  'isa_arevalo.txt',
-  'isa_zzzzzzz.txt',
-  'isa_zuzuarregui.txt',
-  'a.x',
-  'b.x',
-  '123.x',
-  '001.x'
+  'o_oo1.png',
+  'o_oo2.png',
+  'o_pp1.png',
+  'o_ab1.png',
+  'o_pp2.png',
+  'connie a',
+  'connie b',
+  'a.gif',
+  'b.gif'
 ];
 
 let names = GetConsolidatedList(strArr);
+console.log(`\nCONSOLIDATES_NAMES:\n${names.join('\n')}`);
+
+
+let filenames = GetFilenamesAssociatedWith(strArr, names[0]);
+console.log(`\n\nASSOCIATED WITH: ${names[0]}\n${filenames.join('\n')}`);
